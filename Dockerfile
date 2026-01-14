@@ -3,9 +3,12 @@ FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+# Copier pyproject.toml
+COPY pyproject.toml ./
 
-RUN uv sync --frozen --no-dev --compile-bytecode
+# Installer les dépendances depuis pyproject.toml
+# Note: uv.lock est optionnel - si vous l'avez, vous pouvez l'ajouter et utiliser --frozen
+RUN uv sync --no-dev --compile-bytecode
 
 COPY pipelines/ ./pipelines/
 COPY utils/ ./utils/

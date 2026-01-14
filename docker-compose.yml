@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U taxi_user -d taxi_data" ]
+      test: ["CMD-SHELL", "pg_isready -U taxi_user -d taxi_data"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,10 +32,57 @@ services:
     networks:
       - taxi_network
 
+  terraform:
+    build:
+      context: .
+      dockerfile: Dockerfile-terraform
+    container_name: terraform-container
+    working_dir: /workspace/terraform
+    volumes:
+      - .:/workspace
+      - azure-cli-data:/root/.azure
+    environment:
+      - TF_IN_AUTOMATION=true
+      - ARM_USE_AZURECLI=true
+    entrypoint: ["/bin/sh"]
+    stdin_open: true
+    tty: true
+    networks:
+      - taxi_network
+
+  nyc-taxi-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nyc-taxi-pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+    environment:
+      # Azure Storage (Azurite pour développement local)
+      - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM2RomM4vJFXpH8VU9sYC4FzFfxzJtLfLq6X3vO/FvOdbw92T5vY+P8qMhFc6qKfPw+9l6UwPTCw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      - AZURE_CONTAINER_NAME=raw
+      # PostgreSQL (service local dans docker-compose)
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=taxi_data
+      - POSTGRES_USER=taxi_user
+      - POSTGRES_PASSWORD=taxi_password
+      - POSTGRES_SSL_MODE=disable
+      # Pipeline config (non utilisé maintenant, mais gardé pour compatibilité)
+      - START_DATE=${START_DATE:-2025-01}
+      - END_DATE=${END_DATE:-2025-02}
+    networks:
+      - taxi_network
+
 volumes:
   postgres_data:
     driver: local
   azurite_data:
+    driver: local
+  azure-cli-data:
     driver: local
 
 networks:

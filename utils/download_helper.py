@@ -17,7 +17,10 @@ def download_file_from_url(url: str, timeout: int = 60) -> Optional[bytes]:
             logger.success(f"Fichier téléchargé avec succès ({size_mb:.2f} MB)")
             return response.content
         elif response.status_code == 404:
-            logger.warning("Fichier non trouvé (404)")
+            logger.warning("Fichier non trouvé (404) - fichier pas encore disponible")
+            return None
+        elif response.status_code == 403:
+            logger.warning("Accès refusé (403) - fichier pas encore disponible ou protégé")
             return None
         else:
             logger.error(f"Erreur HTTP {response.status_code}")

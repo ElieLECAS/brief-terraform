@@ -52,26 +52,41 @@ def telecharger_fichier(annee, mois):
 def sauvegarder_local(contenu, annee, mois):
     nom_fichier = f"yellow_tripdata_{annee}-{mois:02d}.parquet"
     chemin = build_file_path("data/raw", nom_fichier)
-    save_file_locally(contenu, chemin)
+    return save_file_locally(contenu, chemin)
 
 
 def uploader_vers_azure(contenu, annee, mois):
     container_name = os.getenv("AZURE_CONTAINER_NAME", "raw")
     blob_name = f"yellow_tripdata_{annee}-{mois:02d}.parquet"
-    upload_file_to_azure(
+    return upload_file_to_azure(
         contenu, blob_name=blob_name, container_name=container_name, create_container=True
     )
 
 
+def obtenir_3_derniers_mois():
+    """
+    Retourne les 3 derniers mois disponibles (mois actuel et 2 mois précédents).
+    """
+    maintenant = datetime.now()
+    liste_mois = []
+    
+    # Commencer par le mois actuel et remonter de 2 mois
+    for i in range(3):
+        date = maintenant - relativedelta(months=i)
+        liste_mois.append((date.year, date.month))
+    
+    return liste_mois
+
+
 def telecharger_donnees_taxi():
-    date_debut = os.getenv("START_DATE")
-    date_fin = os.getenv("END_DATE")
+    """
+    Télécharge les 3 derniers fichiers disponibles.
+    """
+    # Obtenir les 3 derniers mois
+    liste_mois = obtenir_3_derniers_mois()
 
-    if not date_debut:
-        raise ValueError("START_DATE doit être défini dans .env")
-
-    liste_mois = generer_liste_mois(date_debut, date_fin)
-
+    logger.info(f"Téléchargement des 3 derniers fichiers disponibles")
+    logger.info(f"Période : {liste_mois[-1][0]}-{liste_mois[-1][1]:02d} à {liste_mois[0][0]}-{liste_mois[0][1]:02d}")
     logger.info(f"{len(liste_mois)} fichiers à télécharger\n")
 
     use_azure = os.getenv("AZURE_STORAGE_CONNECTION_STRING") is not None
@@ -81,15 +96,29 @@ def telecharger_donnees_taxi():
     else:
         logger.info("Mode local activé (pas de credentials Azure)")
 
+    fichiers_telecharges = 0
     for annee, mois in liste_mois:
+        logger.info(f"Téléchargement du fichier {annee}-{mois:02d}...")
         contenu = telecharger_fichier(annee, mois)
 
-        if use_azure:
-            uploader_vers_azure(contenu, annee, mois)
-        else:
-            sauvegarder_local(contenu, annee, mois)
+        if contenu is None:
+            logger.warning(f"⚠ Fichier {annee}-{mois:02d} non disponible, passage au suivant")
+            continue
 
-    logger.success("\nTéléchargement terminé")
+        if use_azure:
+            if uploader_vers_azure(contenu, annee, mois):
+                logger.success(f"✓ Fichier {annee}-{mois:02d} uploadé vers Azure")
+                fichiers_telecharges += 1
+            else:
+                logger.error(f"✗ Échec de l'upload du fichier {annee}-{mois:02d}")
+        else:
+            if sauvegarder_local(contenu, annee, mois):
+                logger.success(f"✓ Fichier {annee}-{mois:02d} sauvegardé localement")
+                fichiers_telecharges += 1
+            else:
+                logger.error(f"✗ Échec de la sauvegarde du fichier {annee}-{mois:02d}")
+
+    logger.success(f"\nTéléchargement terminé : {fichiers_telecharges}/{len(liste_mois)} fichiers téléchargés avec succès")
 
 
 if __name__ == "__main__":

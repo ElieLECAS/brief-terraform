@@ -1,0 +1,33 @@
+# Exemple de configuration Terraform
+# Copiez ce fichier vers terraform.tfvars et remplissez vos valeurs
+
+# Nom du projet
+project_name = "nyctaxi"
+
+# Environnement
+environment = "dev"
+
+# Région Azure (obligatoire: francecentral)
+location = "francecentral"
+
+# Tags
+tags = {
+  Project     = "NYC Taxi Pipeline"
+  ManagedBy   = "Terraform"
+  Environment = "dev"
+  Owner       = "VotreNom"
+}
+
+# Configuration des pipelines
+start_date = "2025-01"  # Date de début (YYYY-MM)
+end_date   = "2025-02"  # Date de fin (YYYY-MM)
+
+# Cosmos DB
+cosmos_db_admin_username = "taxiadmin"
+# cosmos_db_admin_password = null  # Généré automatiquement si null
+
+# Container Apps
+container_apps_cpu         = 0.5
+container_apps_memory      = "1Gi"
+container_apps_min_replicas = 0
+container_apps_max_replicas = 1
