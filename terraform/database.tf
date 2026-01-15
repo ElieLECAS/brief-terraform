@@ -6,7 +6,7 @@ resource "azurerm_cosmosdb_postgresql_cluster" "main" {
   resource_group_name             = data.azurerm_resource_group.main.name
   location                        = data.azurerm_resource_group.main.location
   administrator_login_password    = var.cosmos_db_admin_password != null ? var.cosmos_db_admin_password : random_password.cosmos_db_password[0].result
-  coordinator_storage_quota_in_mb = 16384
+  coordinator_storage_quota_in_mb = 32768
   coordinator_vcore_count         = 1
   node_count                      = 0
   coordinator_server_edition       = "BurstableMemoryOptimized"

@@ -64,11 +64,15 @@ Ce projet déploie une infrastructure cloud complète sur Azure pour traiter les
 │   ├── providers.tf               # Configuration Azure provider
 │   ├── main.tf                    # Resource Group, randoms
 │   ├── variables.tf               # Définition des variables
+│   ├── outputs.tf                 # Outputs Terraform
 │   ├── terraform.tfvars          # Vos valeurs de configuration
 │   ├── storage.tf                # Storage Account et containers
 │   ├── container_registry.tf    # Azure Container Registry
 │   ├── database.tf               # Cosmos DB for PostgreSQL
+│   ├── log_analytics.tf          # Log Analytics Workspace
 │   └── container_apps.tf         # Container Apps et environnement
+│
+├── build-and-push.ps1            # Script PowerShell pour build/push Docker
 │
 ├── pipelines/                     # Application Python (fournie)
 │   ├── ingestion/                # Pipeline 1 : Download
@@ -173,18 +177,83 @@ terraform plan
 
 ## 📦 Déploiement
 
-### Étape 1 : Créer l'infrastructure de base
+### Prérequis : Enregistrer le provider Microsoft.App
 
-Créer d'abord l'ACR pour pouvoir y pousser l'image Docker :
+**⚠️ Important** : Le provider `Microsoft.App` (Container Apps) doit être enregistré avant le déploiement.
+
+#### Vérifier d'abord si le provider est déjà enregistré
 
 ```bash
+# Vérifier l'état du provider
+az provider show --namespace Microsoft.App --query "registrationState"
+```
+
+Si le résultat est `"Registered"`, vous pouvez passer à l'étape suivante.
+
+#### Si le provider n'est pas enregistré
+
+**Option 1 : Enregistrer le provider (nécessite des permissions d'administrateur)**
+
+```bash
+# Enregistrer le provider
+az provider register --namespace Microsoft.App
+
+# Attendre quelques secondes puis vérifier
+az provider show --namespace Microsoft.App --query "registrationState"
+# Doit retourner "Registered"
+```
+
+**Option 2 : Demander à un administrateur**
+
+Si vous obtenez une erreur `AuthorizationFailed`, votre compte n'a pas les permissions nécessaires. Dans ce cas :
+
+1. **Demandez à un administrateur** d'exécuter la commande :
+   ```bash
+   az provider register --namespace Microsoft.App
+   ```
+
+2. **Ou vérifiez si le provider est déjà enregistré** au niveau de l'abonnement (même si vous ne pouvez pas l'enregistrer vous-même) :
+   ```bash
+   az provider show --namespace Microsoft.App --query "registrationState"
+   ```
+
+3. **Si le provider est déjà "Registered"**, vous pouvez continuer même si vous ne pouvez pas l'enregistrer vous-même.
+
+**Note** : Dans certains environnements (comme les abonnements étudiants ou d'entreprise), le provider peut déjà être enregistré par défaut.
+
+### Étape 1 : Créer l'infrastructure de base
+
+Créer d'abord l'ACR et le Storage Account pour pouvoir y pousser l'image Docker :
+
+```bash
+cd terraform
+
 # Déployer uniquement ACR et Storage (pour commencer)
 terraform apply -target=azurerm_container_registry.main -target=azurerm_storage_account.main
 ```
 
 ### Étape 2 : Build et Push de l'image Docker
 
+#### Option A : Script PowerShell (Windows - Recommandé)
+
+```powershell
+# Depuis la racine du projet
+.\build-and-push.ps1
+```
+
+Le script automatise toutes les étapes :
+- Récupération des informations ACR depuis Terraform
+- Connexion à ACR
+- Build de l'image Docker
+- Tag et push vers ACR
+- Vérification
+
+#### Option B : Commandes manuelles (Linux/Mac)
+
 ```bash
+# Depuis terraform/
+cd terraform
+
 # Récupérer le nom de l'ACR
 ACR_NAME=$(terraform output -raw acr_name)
 ACR_URL=$(terraform output -raw acr_login_server)
@@ -211,14 +280,20 @@ az acr repository show-tags --name $ACR_NAME --repository nyc-taxi-pipeline
 ### Étape 3 : Déployer l'infrastructure complète
 
 ```bash
-# Revenir dans terraform/
+# Depuis terraform/
 cd terraform
+
+# Valider la configuration
+terraform validate
+terraform plan
 
 # Déployer toute l'infrastructure
 terraform apply
 ```
 
 **⏱️ Durée estimée** : 5-10 minutes (Cosmos DB prend du temps à provisionner)
+
+**📝 Note** : Assurez-vous que l'image Docker est bien poussée vers ACR avant d'exécuter `terraform apply`, sinon le Container App ne pourra pas démarrer.
 
 ### Étape 4 : Vérifier le déploiement
 
@@ -286,13 +361,74 @@ ORDER BY nombre_courses DESC;
 
 ## 🔧 Troubleshooting
 
+### Erreur : "The resource provider 'Microsoft.App' has not been registered"
+
+**Cause** : Le provider Microsoft.App n'est pas enregistré dans votre abonnement Azure
+
+**Solution** :
+
+1. **Vérifier d'abord si le provider est déjà enregistré** :
+   ```bash
+   az provider show --namespace Microsoft.App --query "registrationState"
+   ```
+
+2. **Si "Registered"** : Le provider est déjà enregistré, le problème vient d'ailleurs. Vérifiez vos permissions et réessayez `terraform apply`.
+
+3. **Si "NotRegistered" ou erreur** :
+   - **Essayer d'enregistrer** (si vous avez les permissions) :
+     ```bash
+     az provider register --namespace Microsoft.App
+     # Attendre 1-2 minutes puis vérifier
+     az provider show --namespace Microsoft.App --query "registrationState"
+     ```
+   
+   - **Si erreur AuthorizationFailed** : Votre compte n'a pas les permissions. Solutions :
+     - Demander à un administrateur d'enregistrer le provider
+     - Vérifier si le provider est déjà enregistré au niveau de l'abonnement (même si vous ne pouvez pas l'enregistrer)
+     - Dans certains cas, le provider peut être enregistré automatiquement lors du premier déploiement
+
+### Erreur : "AuthorizationFailed" lors de l'enregistrement du provider
+
+**Cause** : Votre compte n'a pas les permissions nécessaires pour enregistrer un provider
+
+**Solutions** (dans l'ordre recommandé) :
+
+1. **Essayer quand même avec Terraform** (souvent ça fonctionne) :
+   ```bash
+   cd terraform
+   terraform init
+   terraform plan
+   ```
+   Si `terraform plan` fonctionne, essayez :
+   ```bash
+   terraform apply -target=azurerm_container_app_environment.main
+   ```
+   Terraform peut parfois enregistrer automatiquement le provider lors du déploiement.
+
+2. **Demander à un administrateur** d'enregistrer le provider pour vous :
+   ```bash
+   az provider register --namespace Microsoft.App
+   ```
+
+3. **Utiliser le portail Azure** :
+   - Portail Azure → Abonnements → Votre abonnement
+   - Fournisseurs de ressources → Rechercher `Microsoft.App` → Enregistrer
+
+4. **Vérifier vos rôles** :
+   ```bash
+   az role assignment list --assignee $(az account show --query user.name -o tsv) --all --output table
+   ```
+
+**Note** : Voir le fichier `SOLUTION-PROVIDER.md` pour plus de détails.
+
 ### Erreur : "MANIFEST_UNKNOWN: manifest tagged by 'latest' is not found"
 
 **Cause** : L'image Docker n'a pas été poussée vers ACR avant `terraform apply`
 
 **Solution** :
-1. Builder et pusher l'image (voir Étape 2)
-2. Réessayer `terraform apply`
+1. Builder et pusher l'image (voir Étape 2 du déploiement)
+2. Vérifier avec : `az acr repository show-tags --name <acr-name> --repository nyc-taxi-pipeline`
+3. Réessayer `terraform apply`
 
 ### Erreur : Cosmos DB SKU Invalid
 
@@ -303,24 +439,43 @@ ORDER BY nombre_courses DESC;
 ### Erreur : Container App ne démarre pas
 
 **Vérifications** :
-1. Vérifier les logs : `az containerapp logs show ...`
+1. Vérifier les logs : `az containerapp logs show --name <nom> --resource-group <rg> --follow`
 2. Vérifier les variables d'environnement dans le portail Azure
-3. Vérifier que l'image existe dans ACR
-4. Vérifier les secrets (storage, postgres, acr)
+3. Vérifier que l'image existe dans ACR : `az acr repository show-tags --name <acr-name> --repository nyc-taxi-pipeline`
+4. Vérifier les secrets (storage, postgres, acr) dans le Container App
+5. Vérifier que le Container App Environment est bien créé
 
 ### Erreur : Connexion PostgreSQL refusée
 
 **Vérifications** :
-1. Vérifier que la firewall rule existe (autoriser services Azure)
+1. Vérifier que la firewall rule existe (autoriser services Azure : 0.0.0.0)
 2. Vérifier SSL mode = `require`
-3. Vérifier les credentials
+3. Vérifier les credentials (récupérer avec `terraform output cosmos_db_password`)
+4. Vérifier que Cosmos DB est bien provisionné (peut prendre 5-10 minutes)
 
 ### L'image Docker ne se build pas
 
 **Vérifications** :
-1. Vérifier que `pyproject.toml` et `uv.lock` existent
+1. Vérifier que `pyproject.toml` existe à la racine
 2. Vérifier que tous les dossiers requis existent (pipelines/, utils/, sql/)
 3. Essayer de builder en mode verbose : `docker build --progress=plain -t nyc-taxi-pipeline:latest .`
+4. Vérifier que Docker Desktop est démarré (Windows/Mac)
+
+### Erreur : Script PowerShell ne s'exécute pas
+
+**Cause** : Politique d'exécution PowerShell restrictive
+
+**Solution** :
+```powershell
+# Vérifier la politique actuelle
+Get-ExecutionPolicy
+
+# Si "Restricted", changer temporairement pour la session
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+
+# Ou exécuter directement avec bypass
+powershell -ExecutionPolicy Bypass -File .\build-and-push.ps1
+```
 
 ## 💰 Gestion des Coûts
 
