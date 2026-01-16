@@ -66,8 +66,49 @@ terraform apply
 terraform destroy
 ```
 
+## Gestion du State Terraform
+
+### Backend Local (par défaut)
+
+Par défaut, le state Terraform est stocké localement dans le fichier `terraform.tfstate`. Ce fichier est exclu du contrôle de version (voir `.gitignore`).
+
+### Backend Distant (recommandé pour production)
+
+Pour utiliser un backend distant Azure Storage (recommandé pour le travail en équipe et la production) :
+
+1. **Première option : Utiliser le Storage Account créé par Terraform**
+   - Déployez d'abord l'infrastructure avec `terraform apply` (backend local)
+   - Récupérez le nom du Storage Account depuis les outputs : `terraform output storage_account_name`
+   - Décommentez et configurez le bloc `backend` dans `providers.tf` :
+   ```hcl
+   backend "azurerm" {
+     resource_group_name  = "elecasRG"
+     storage_account_name = "<nom-du-storage-account>"
+     container_name       = "tfstate"
+     key                  = "terraform.tfstate"
+   }
+   ```
+   - Activez la création du container dans `terraform.tfvars` :
+   ```hcl
+   terraform_backend_enabled = true
+   terraform_backend_container = "tfstate"
+   ```
+   - Migrez le state : `terraform init -migrate-state`
+
+2. **Deuxième option : Utiliser un Storage Account existant**
+   - Créez manuellement un Storage Account et un container "tfstate" dans Azure
+   - Configurez le backend dans `providers.tf` avec le nom du Storage Account existant
+   - Exécutez `terraform init`
+
+**Avantages du backend distant :**
+- Partage du state entre membres de l'équipe
+- Locking automatique (évite les conflits)
+- Historique des versions du state
+- Sécurité renforcée
+
 ## Notes
 
 - Le volume `azure-cli-data` persiste les credentials Azure CLI entre les redémarrages du conteneur
 - Après la première authentification, vous n'aurez plus besoin de vous reconnecter (sauf expiration du token)
 - Les tokens Azure CLI expirent généralement après quelques heures/jours
+- Le state Terraform contient des informations sensibles : ne jamais le commiter dans Git

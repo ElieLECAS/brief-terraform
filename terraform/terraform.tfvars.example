@@ -31,3 +31,8 @@ container_apps_cpu         = 0.5
 container_apps_memory      = "1Gi"
 container_apps_min_replicas = 0
 container_apps_max_replicas = 1
+
+# Backend Terraform (optionnel)
+# terraform_backend_enabled = false  # Activer le backend distant pour le state
+# terraform_backend_storage_account = ""  # Nom du Storage Account pour le state (vide = utiliser le Storage Account principal)
+# terraform_backend_container = "tfstate"  # Nom du container pour le state

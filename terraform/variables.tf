@@ -77,3 +77,22 @@ variable "container_apps_max_replicas" {
   type        = number
   default     = 1
 }
+
+# Backend Terraform Configuration
+variable "terraform_backend_enabled" {
+  description = "Activer le backend distant pour le state Terraform (nécessite un Storage Account existant)"
+  type        = bool
+  default     = false
+}
+
+variable "terraform_backend_storage_account" {
+  description = "Nom du Storage Account pour stocker le state Terraform (doit exister avant)"
+  type        = string
+  default     = ""
+}
+
+variable "terraform_backend_container" {
+  description = "Nom du container pour stocker le state Terraform"
+  type        = string
+  default     = "tfstate"
+}

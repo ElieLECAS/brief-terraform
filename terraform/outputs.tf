@@ -23,6 +23,11 @@ output "storage_container_raw" {
   value       = azurerm_storage_container.raw.name
 }
 
+output "storage_container_tfstate" {
+  description = "Nom du container pour le state Terraform (si activé)"
+  value       = var.terraform_backend_enabled && length(azurerm_storage_container.tfstate) > 0 ? azurerm_storage_container.tfstate[0].name : null
+}
+
 # Container Registry
 output "acr_name" {
   description = "Nom de l'Azure Container Registry"
