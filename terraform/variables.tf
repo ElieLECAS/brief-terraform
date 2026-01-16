@@ -1,5 +1,10 @@
 # Définition des variables
 
+variable "subscription_id" {
+  description = "ID de la souscription Azure"
+  type        = string
+}
+
 variable "project_name" {
   description = "Nom du projet (utilisé pour nommer les ressources)"
   type        = string

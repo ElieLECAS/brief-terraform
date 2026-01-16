@@ -1,6 +1,9 @@
 # Exemple de configuration Terraform
 # Copiez ce fichier vers terraform.tfvars et remplissez vos valeurs
 
+# ID de souscription Azure (obligatoire)
+subscription_id = "VOTRE-SUBSCRIPTION-ID"  # Obtenez-le avec : az account show --query id -o tsv
+
 # Nom du projet
 project_name = "nyctaxi"
 
